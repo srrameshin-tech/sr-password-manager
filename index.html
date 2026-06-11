@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SR Password Vault v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root{--bg:#0D0D1A;--surface:#13132A;--surface2:#1A1A35;--border:#2A2A50;--accent:#7C3AED;--accent2:#A855F7;--accent3:#06B6D4;--accent4:#10B981;--accent5:#F59E0B;--accent6:#EF4444;--text:#F1F0FF;--muted:#6B7280;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* LOCK */
+.lock-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at 30% 20%,rgba(124,58,237,0.15) 0%,transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(6,182,212,0.1) 0%,transparent 60%),var(--bg);}
+.lock-card{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:36px 28px;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(124,58,237,0.15);}
+.lock-logo{text-align:center;margin-bottom:24px;}
+.lock-logo-icon{width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;}
+.lock-logo h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent2),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.lock-logo p{color:var(--muted);font-size:13px;margin-top:4px;}
+.user-select{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;max-height:200px;overflow-y:auto;}
+.user-option{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:12px;cursor:pointer;transition:all 0.2s;}
+.user-option:hover,.user-option.active{border-color:var(--accent);background:rgba(124,58,237,0.1);}
+.user-option .u-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.user-option .u-name{font-size:14px;font-weight:600;}
+.user-option .u-role{font-size:11px;color:var(--muted);}
+.lock-input-wrap{position:relative;margin-bottom:12px;}
+.lock-input{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:12px;padding:13px 46px 13px 14px;font-size:15px;outline:none;font-family:'Inter',sans-serif;transition:border-color 0.2s;}
+.lock-input:focus{border-color:var(--accent);}
+.eye-btn{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;}
+.btn-primary{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;margin-top:4px;}
+.lock-error{color:#EF4444;font-size:13px;text-align:center;margin-top:8px;min-height:20px;}
+.forgot-link{text-align:center;margin-top:12px;}
+.forgot-link button{background:none;border:none;color:var(--accent2);font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;text-decoration:underline;}
+
+/* MODALS */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;overflow-y:auto;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%;max-width:400px;margin:auto;}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px;}
+.modal-input{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;font-family:'Inter',sans-serif;margin-bottom:10px;}
+.modal-input:focus{border-color:var(--accent);}
+.modal-select{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;font-family:'Inter',sans-serif;margin-bottom:10px;}
+.modal-btns{display:flex;gap:8px;margin-top:4px;}
+.btn-cancel{flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-confirm{flex:1;padding:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+.modal-error{color:#EF4444;font-size:12px;margin-bottom:8px;min-height:16px;}
+
+/* APP */
+#app{display:none;min-height:100vh;}
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.app-logo{display:flex;align-items:center;gap:10px;}
+.app-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.app-logo span{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;background:linear-gradient(135deg,var(--accent2),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.user-badge{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.icon-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* TABS */
+.nav-tabs{display:flex;background:var(--surface2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;}
+.nav-tabs::-webkit-scrollbar{display:none;}
+.nav-tab{flex:0 0 auto;padding:10px 16px;border:none;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+.nav-tab.active{color:var(--accent2);border-bottom-color:var(--accent2);}
+
+/* MAIN */
+.main{padding:16px;max-width:700px;margin:0 auto;}
+.page{display:none;}.page.active{display:block;}
+
+/* SEARCH */
+.search-wrap{position:relative;margin-bottom:14px;}
+.search-input{width:100%;background:var(--surface);border:2px solid var(--border);color:var(--text);border-radius:14px;padding:12px 44px 12px 14px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.search-input:focus{border-color:var(--accent);}
+.search-icon{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--muted);}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;text-align:center;}
+.stat-num{font-size:22px;font-weight:800;font-family:'Space Grotesk',sans-serif;}
+.stat-label{font-size:11px;color:var(--muted);margin-top:3px;}
+
+/* CAT FILTER */
+.cat-scroll{display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px;scrollbar-width:none;}
+.cat-scroll::-webkit-scrollbar{display:none;}
+.cat-chip{flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all 0.2s;font-family:'Inter',sans-serif;}
+.cat-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* ENTRY CARD */
+.entry-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden;transition:border-color 0.2s;}
+.entry-card:hover{border-color:var(--accent);}
+.entry-header{padding:14px 14px 10px;display:flex;align-items:center;gap:12px;cursor:pointer;}
+.entry-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.entry-info{flex:1;min-width:0;}
+.entry-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.entry-sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.entry-acts{display:flex;gap:5px;}
+.act-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 8px;font-size:12px;cursor:pointer;}
+.act-btn:hover{border-color:var(--accent);color:var(--accent);}
+.act-btn.del:hover{border-color:#EF4444;color:#EF4444;}
+
+/* ENTRY DETAIL */
+.entry-detail{display:none;padding:0 14px 14px;border-top:1px solid var(--border);}
+.entry-detail.open{display:block;}
+.detail-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:8px;}
+.detail-row:last-child{border-bottom:none;}
+.detail-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;}
+.detail-value{font-size:13px;color:var(--text);display:flex;align-items:center;gap:6px;min-width:0;flex:1;justify-content:flex-end;}
+.copy-btn{background:none;border:none;color:var(--accent2);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:6px;white-space:nowrap;}
+
+/* FAB */
+.fab{position:fixed;bottom:24px;right:20px;width:54px;height:54px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:16px;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(124,58,237,0.4);z-index:200;display:none;align-items:center;justify-content:center;}
+
+/* FORM */
+.form-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;display:none;align-items:flex-end;justify-content:center;}
+.form-modal.open{display:flex;}
+.form-sheet{background:var(--surface);border-radius:24px 24px 0 0;padding:20px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;}
+.form-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.form-title{font-size:17px;font-weight:700;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;}
+.form-field{margin-bottom:12px;}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.form-input{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.form-input:focus{border-color:var(--accent);}
+.form-select{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.form-textarea{width:100%;background:var(--surface2);border:2px solid var(--border);color:var(--text);border-radius:10px;padding:11px 13px;font-size:14px;outline:none;font-family:'Inter',sans-serif;resize:none;height:80px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pw-row{display:flex;gap:8px;}
+.btn-gen{background:linear-gradient(135deg,var(--accent3),#0891B2);color:#fff;border:none;border-radius:10px;padding:11px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif;}
+.cat-fields-section{background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:14px;margin-bottom:12px;}
+.cat-fields-title{font-size:12px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;}
+.form-btns{display:flex;gap:10px;margin-top:8px;}
+.btn-save{flex:1;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+.btn-del-entry{padding:13px 16px;background:rgba(239,68,68,0.15);border:1px solid #EF4444;color:#EF4444;border-radius:12px;font-size:15px;cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* CATEGORY MANAGER */
+.section-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.cat-mgr-item{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;}
+.cat-mgr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.cat-mgr-name{font-size:14px;font-weight:700;}
+.cat-mgr-acts{display:flex;gap:6px;}
+.field-chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;margin:3px;}
+.field-chip button{background:none;border:none;color:#EF4444;cursor:pointer;font-size:12px;padding:0;}
+.add-field-row{display:flex;gap:8px;margin-top:10px;}
+.add-field-input{flex:1;background:var(--bg);border:2px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:'Inter',sans-serif;}
+.add-field-input:focus{border-color:var(--accent);}
+.add-field-select{background:var(--bg);border:2px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:'Inter',sans-serif;}
+.btn-add-field{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+.new-cat-form{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:16px;}
+.new-cat-row{display:flex;gap:8px;margin-bottom:8px;}
+.emoji-input{width:54px;background:var(--bg);border:2px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:18px;outline:none;text-align:center;}
+.cat-name-input{flex:1;background:var(--bg);border:2px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.cat-name-input:focus{border-color:var(--accent);}
+.btn-create-cat{padding:8px 18px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* USER MANAGER */
+.user-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;}
+.user-avatar{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.user-info{flex:1;}
+.user-name{font-size:14px;font-weight:700;}
+.user-meta{font-size:12px;color:var(--muted);margin-top:3px;}
+.user-acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.status-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;}
+.status-active{background:rgba(16,185,129,0.2);color:#10B981;}
+.status-disabled{background:rgba(239,68,68,0.2);color:#EF4444;}
+.toggle-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;}
+
+/* BACKUP */
+.backup-card{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
+.backup-title{font-size:14px;font-weight:700;margin-bottom:8px;}
+.backup-desc{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6;}
+.btn-backup{width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-export{background:linear-gradient(135deg,#1565C0,#0D47A1);color:#fff;}
+.btn-import{background:linear-gradient(135deg,#059669,#047857);color:#fff;}
+
+/* EMPTY */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-icon{font-size:48px;margin-bottom:12px;}
+
+/* TOAST */
+#toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:all 0.3s;z-index:999;white-space:nowrap;box-shadow:0 4px 24px rgba(124,58,237,0.15);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--accent);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lockScreen">
+  <div class="lock-card">
+    <div class="lock-logo">
+      <div class="lock-logo-icon">🔐</div>
+      <h1>SR Password Vault</h1>
+      <p>v2.0 — Secure. Private. Always with you.</p>
+    </div>
+    <div class="user-select" id="userList">
+      <!-- Populated dynamically -->
+    </div>
+    <div class="lock-input-wrap">
+      <input type="password" class="lock-input" id="masterPw" placeholder="Master Password" onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="eye-btn" onclick="toggleEye('masterPw',this)">👁️</button>
+    </div>
+    <div class="lock-error" id="lockError"></div>
+    <button class="btn-primary" onclick="doLogin()">🔓 Unlock Vault</button>
+    <div class="forgot-link">
+      <button onclick="openReset()">Forgot password?</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET MODAL -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal">
+    <h3>🔑 Reset Password</h3>
+    <div class="modal-error" id="resetError"></div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter the secret reset code to reset your password.</p>
+    <input type="password" class="modal-input" id="resetCode" placeholder="Secret Reset Code">
+    <input type="password" class="modal-input" id="newPw" placeholder="New Password">
+    <input type="password" class="modal-input" id="confirmPw" placeholder="Confirm Password">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('resetModal')">Cancel</button>
+      <button class="btn-confirm" onclick="doReset()">Reset ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal-overlay" id="changePwModal">
+  <div class="modal">
+    <h3>🔑 Change Password</h3>
+    <div class="modal-error" id="changePwError"></div>
+    <input type="password" class="modal-input" id="oldPw" placeholder="Current Password">
+    <input type="password" class="modal-input" id="newPw2" placeholder="New Password">
+    <input type="password" class="modal-input" id="confirmPw2" placeholder="Confirm Password">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('changePwModal')">Cancel</button>
+      <button class="btn-confirm" onclick="doChangePw()">Change ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal">
+    <h3>👤 Add User</h3>
+    <div class="modal-error" id="addUserError"></div>
+    <input type="text" class="modal-input" id="newUserEmoji" placeholder="Avatar emoji (e.g. 👤)" style="width:80px;display:inline-block;margin-right:8px;">
+    <input type="text" class="modal-input" id="newUserName" placeholder="User name" style="width:calc(100% - 96px);display:inline-block;">
+    <select class="modal-select" id="newUserRole">
+      <option value="member">👤 Member</option>
+      <option value="admin">👑 Admin</option>
+    </select>
+    <input type="password" class="modal-input" id="newUserPw" placeholder="Password">
+    <input type="text" class="modal-input" id="newUserSecret" placeholder="Secret reset code (e.g. TEMPLE2026)">
+    <input type="number" class="modal-input" id="newUserTimeout" placeholder="Auto logout (minutes, 0=never)" min="0">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('addUserModal')">Cancel</button>
+      <button class="btn-confirm" onclick="saveNewUser()">Add User ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="app-header">
+    <div class="app-logo">
+      <div class="app-logo-icon">🔐</div>
+      <span>SR Vault</span>
+    </div>
+    <div class="header-right">
+      <span class="user-badge" id="userBadge">Admin</span>
+      <button class="icon-btn" onclick="openModal('changePwModal')" title="Change Password">🔑</button>
+      <button class="icon-btn" onclick="doLogout()">🚪</button>
+    </div>
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchPage('passwords',this)">🔐 Passwords</button>
+    <button class="nav-tab" onclick="switchPage('categories',this)" id="catTab" style="display:none">🏷️ Categories</button>
+    <button class="nav-tab" onclick="switchPage('users',this)" id="userTab" style="display:none">👥 Users</button>
+    <button class="nav-tab" onclick="switchPage('backup',this)" id="backupTab" style="display:none">💾 Backup</button>
+  </div>
+
+  <div class="main">
+
+    <!-- PASSWORDS PAGE -->
+    <div class="page active" id="page-passwords">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="searchInp" placeholder="🔍 Search entries..." oninput="renderEntries()">
+        <span class="search-icon">🔍</span>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="totalCount" style="background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-num" id="catCount" style="background:linear-gradient(135deg,var(--accent3),#0891B2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div><div class="stat-label">Categories</div></div>
+        <div class="stat-card"><div class="stat-num" id="myCount" style="background:linear-gradient(135deg,var(--accent4),#059669);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div><div class="stat-label">Mine</div></div>
+      </div>
+      <div class="cat-scroll" id="catFilter"></div>
+      <div id="entriesList"></div>
+    </div>
+
+    <!-- CATEGORIES PAGE -->
+    <div class="page" id="page-categories">
+      <div class="section-title">
+        🏷️ Category Manager
+        <button class="icon-btn" onclick="document.getElementById('newCatForm').style.display=document.getElementById('newCatForm').style.display==='none'?'block':'none'">+ New</button>
+      </div>
+
+      <!-- New Category Form -->
+      <div class="new-cat-form" id="newCatForm" style="display:none;">
+        <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px;">➕ Create New Category</div>
+        <div class="new-cat-row">
+          <input type="text" class="emoji-input" id="newCatEmoji" placeholder="📁">
+          <input type="text" class="cat-name-input" id="newCatName" placeholder="Category name...">
+          <button class="btn-create-cat" onclick="createCategory()">Create</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);">After creating, add custom fields below.</div>
+      </div>
+
+      <div id="catMgrList"></div>
+    </div>
+
+    <!-- USERS PAGE -->
+    <div class="page" id="page-users">
+      <div class="section-title">
+        👥 User Management
+        <button class="icon-btn" onclick="openModal('addUserModal')">+ Add User</button>
+      </div>
+      <div id="usersList"></div>
+    </div>
+
+    <!-- BACKUP PAGE -->
+    <div class="page" id="page-backup">
+      <div class="section-title">💾 Backup & Restore</div>
+
+      <div class="backup-card">
+        <div class="backup-title">📤 Export Backup</div>
+        <div class="backup-desc">Download all your passwords, categories and settings as a JSON file. Keep this file safe!</div>
+        <button class="btn-backup btn-export" onclick="exportBackup()">📤 Download Backup</button>
+      </div>
+
+      <div class="backup-card">
+        <div class="backup-title">📂 Import / Restore</div>
+        <div class="backup-desc">⚠️ Warning: This will replace ALL current data with the backup file. Make sure you have a recent backup before importing!</div>
+        <button class="btn-backup btn-import" onclick="document.getElementById('importFile').click()">📂 Import Backup</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)">
+      </div>
+
+      <div class="backup-card">
+        <div class="backup-title">ℹ️ Info</div>
+        <div class="backup-desc">
+          • Backup includes: all passwords, categories, custom fields<br>
+          • Passwords are stored in Firebase cloud<br>
+          • Last backup: <span id="lastBackup" style="color:var(--accent2);">Never</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fabBtn" onclick="openForm()">+</button>
+
+<!-- ENTRY FORM -->
+<div class="form-modal" id="formModal">
+  <div class="form-sheet">
+    <div class="form-handle"></div>
+    <div class="form-title">
+      <span id="formTitle">➕ New Entry</span>
+      <button onclick="closeForm()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+    </div>
+
+    <div class="form-row">
+      <div class="form-field" style="grid-column:1/-1;">
+        <label class="form-label">Title / Name *</label>
+        <input type="text" class="form-input" id="fName" placeholder="e.g. Gmail, SBI Bank, Facebook">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-field">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="fCat" onchange="onCatChange()"></select>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Visible to</label>
+        <select class="form-select" id="fOwner"></select>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">Username / Email</label>
+      <input type="text" class="form-input" id="fUser" placeholder="username or email">
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">Password</label>
+      <div class="pw-row">
+        <input type="text" class="form-input" id="fPw" placeholder="password" style="flex:1">
+        <button class="btn-gen" onclick="genPassword()">⚡ Generate</button>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">URL / Link</label>
+      <input type="text" class="form-input" id="fUrl" placeholder="https://...">
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">Hint / Notes</label>
+      <textarea class="form-textarea" id="fNote" placeholder="Any notes, hints, or reminders..."></textarea>
+    </div>
+
+    <!-- Category specific fields -->
+    <div id="catSpecificFields"></div>
+
+    <div class="form-btns">
+      <button class="btn-del-entry" id="delBtn" onclick="deleteEntry()" style="display:none">🗑️</button>
+      <button class="btn-save" onclick="saveEntry()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// FIREBASE
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDkXcjq7mX0qi8OJNGgmLX6caVbJNPlyME",
+  authDomain: "sr-password-manager.firebaseapp.com",
+  databaseURL: "https://sr-password-manager-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sr-password-manager",
+  storageBucket: "sr-password-manager.firebasestorage.app",
+  messagingSenderId: "512349724490",
+  appId: "1:512349724490:web:62b9ab84f2fde502d2abb3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ============================================================
+// STATE
+// ============================================================
+let currentUser = null;
+let isAdmin = false;
+let entries = [];
+let users = {};
+let categories = {};
+let editEntryId = null;
+let currentCat = 'All';
+let autoLogoutTimer = null;
+let showPwMap = {};
+
+// ============================================================
+// DEFAULT DATA
+// ============================================================
+const DEFAULT_USERS = {
+  admin: { id:'admin', name:'Admin', emoji:'👑', role:'admin', password:'1981', secretCode:'TEMPLE2026', timeout:0, active:true, createdAt:Date.now() },
+  ramesh: { id:'ramesh', name:'Ramesh', emoji:'👤', role:'member', password:'1981', secretCode:'TEMPLE2026', timeout:60, active:true, createdAt:Date.now() },
+  family: { id:'family', name:'Family', emoji:'👨‍👩‍👧', role:'member', password:'1981', secretCode:'TEMPLE2026', timeout:30, active:true, createdAt:Date.now() }
+};
+
+const DEFAULT_CATEGORIES = {
+  web: { id:'web', emoji:'🌐', name:'Web', isDefault:true, fields:[
+    {id:'cf_login_url',label:'Login URL',type:'url'},
+    {id:'cf_recovery_email',label:'Recovery Email',type:'email'},
+    {id:'cf_linked_phone',label:'Linked Phone',type:'tel'},
+    {id:'cf_2fa',label:'2FA Secret / Backup Code',type:'text'},
+  ]},
+  bank: { id:'bank', emoji:'🏦', name:'Bank', isDefault:true, fields:[
+    {id:'cf_bank_name',label:'Bank Name & Branch',type:'text'},
+    {id:'cf_account',label:'Account Number',type:'text'},
+    {id:'cf_debit',label:'Debit Card Number',type:'text'},
+    {id:'cf_pin',label:'Card PIN',type:'password'},
+    {id:'cf_nb_id',label:'Net Banking User ID',type:'text'},
+    {id:'cf_nb_pw',label:'Net Banking Password',type:'password'},
+    {id:'cf_ifsc',label:'IFSC Code',type:'text'},
+    {id:'cf_upi',label:'UPI ID',type:'text'},
+    {id:'cf_extra',label:'Extra Info',type:'text'},
+  ]},
+  app: { id:'app', emoji:'📱', name:'App', isDefault:true, fields:[
+    {id:'cf_app_link',label:'App Link / Play Store URL',type:'url'},
+    {id:'cf_admin_pass',label:'Admin Password',type:'password'},
+    {id:'cf_member_pass',label:'Members Password',type:'password'},
+    {id:'cf_login_id',label:'Login ID',type:'text'},
+    {id:'cf_admin_id',label:'Admin ID',type:'text'},
+    {id:'cf_email_id',label:'Email ID',type:'email'},
+    {id:'cf_email_pass',label:'Email Password',type:'password'},
+    {id:'cf_username',label:'Username',type:'text'},
+    {id:'cf_username_pass',label:'Username Password',type:'password'},
+    {id:'cf_admin_hint',label:'Admin Hint',type:'text'},
+    {id:'cf_member_hint',label:'Member Hint',type:'text'},
+    {id:'cf_master_pass',label:'Master Password',type:'password'},
+    {id:'cf_forgot_pass',label:'Forgot Password Info',type:'text'},
+    {id:'cf_secret_code',label:'Secret Code',type:'text'},
+    {id:'cf_custom',label:'Custom Field',type:'text'},
+  ]},
+  email: { id:'email', emoji:'📧', name:'Email', isDefault:true, fields:[
+    {id:'cf_recovery_email2',label:'Recovery Email',type:'email'},
+    {id:'cf_recovery_phone',label:'Recovery Phone',type:'tel'},
+    {id:'cf_smtp',label:'SMTP / IMAP Server',type:'text'},
+    {id:'cf_app_pw',label:'App Password',type:'password'},
+  ]},
+  shopping: { id:'shopping', emoji:'🛒', name:'Shopping', isDefault:true, fields:[
+    {id:'cf_reg_phone',label:'Registered Phone',type:'tel'},
+    {id:'cf_address',label:'Saved Address',type:'text'},
+    {id:'cf_wallet',label:'Wallet Balance',type:'text'},
+    {id:'cf_saved_card',label:'Saved Card (last 4)',type:'text'},
+  ]},
+  streaming: { id:'streaming', emoji:'📺', name:'Streaming', isDefault:true, fields:[
+    {id:'cf_plan',label:'Plan / Subscription',type:'text'},
+    {id:'cf_expiry',label:'Expiry Date',type:'date'},
+    {id:'cf_screens',label:'Number of Screens',type:'number'},
+    {id:'cf_shared',label:'Shared With',type:'text'},
+  ]},
+  work: { id:'work', emoji:'💼', name:'Work', isDefault:true, fields:[
+    {id:'cf_company',label:'Company Name',type:'text'},
+    {id:'cf_emp_id',label:'Employee ID',type:'text'},
+    {id:'cf_domain',label:'Domain / VPN',type:'text'},
+    {id:'cf_work_extra',label:'Extra Info',type:'text'},
+  ]},
+  govt: { id:'govt', emoji:'🏛️', name:'Govt', isDefault:true, fields:[
+    {id:'cf_id_num',label:'ID Number (Aadhar/PAN etc)',type:'text'},
+    {id:'cf_dob',label:'Date of Birth',type:'date'},
+    {id:'cf_ref_num',label:'Reference Number',type:'text'},
+    {id:'cf_reg_mobile',label:'Registered Mobile',type:'tel'},
+  ]},
+  other: { id:'other', emoji:'🔧', name:'Other', isDefault:true, fields:[
+    {id:'cf_other1',label:'Custom Field 1',type:'text'},
+    {id:'cf_other2',label:'Custom Field 2',type:'text'},
+    {id:'cf_other3',label:'Custom Field 3',type:'text'},
+    {id:'cf_other4',label:'Custom Field 4',type:'text'},
+  ]},
+};
+
+// ============================================================
+// FIREBASE LISTENERS
+// ============================================================
+db.ref('users').once('value', snap => {
+  if (!snap.exists()) {
+    db.ref('users').set(DEFAULT_USERS);
+    users = {...DEFAULT_USERS};
+  } else {
+    users = snap.val() || {};
+  }
+  renderLockScreen();
+});
+
+db.ref('users').on('value', snap => {
+  users = snap.val() || {};
+  renderLockScreen();
+  if (currentUser) renderUsers();
+});
+
+db.ref('categories').once('value', snap => {
+  if (!snap.exists()) {
+    db.ref('categories').set(DEFAULT_CATEGORIES);
+    categories = {...DEFAULT_CATEGORIES};
+  } else {
+    categories = snap.val() || {};
+  }
+  if (currentUser) { updateCatDropdown(); renderCatManager(); }
+});
+
+db.ref('categories').on('value', snap => {
+  categories = snap.val() || {};
+  if (currentUser) { updateCatDropdown(); renderCatManager(); }
+});
+
+db.ref('entries').on('value', snap => {
+  entries = [];
+  const data = snap.val();
+  if (data) Object.keys(data).forEach(k => entries.push({id:k,...data[k]}));
+  if (currentUser) { renderEntries(); updateStats(); }
+});
+
+// ============================================================
+// LOCK SCREEN
+// ============================================================
+function renderLockScreen() {
+  const list = document.getElementById('userList');
+  const activeUsers = Object.values(users).filter(u => u.active !== false);
+  list.innerHTML = activeUsers.map(u => `
+    <div class="user-option ${currentUser===u.id?'active':''}" onclick="selectUser('${u.id}')">
+      <div class="u-avatar" style="background:linear-gradient(135deg,${u.role==='admin'?'#7C3AED,#A855F7':'#0891B2,#06B6D4'})">${u.emoji||'👤'}</div>
+      <div>
+        <div class="u-name">${u.name}</div>
+        <div class="u-role">${u.role==='admin'?'Administrator':'Member'}</div>
+      </div>
+    </div>
+  `).join('');
+  if (!currentUser && activeUsers.length) selectUser(activeUsers[0].id);
+}
+
+function selectUser(id) {
+  currentUser = id;
+  document.querySelectorAll('.user-option').forEach(el => el.classList.remove('active'));
+  const els = document.querySelectorAll('.user-option');
+  els.forEach(el => { if(el.onclick.toString().includes(`'${id}'`)) el.classList.add('active'); });
+  renderLockScreen();
+}
+
+function doLogin() {
+  const pw = document.getElementById('masterPw').value;
+  const user = users[currentUser];
+  if (!user) { document.getElementById('lockError').textContent = '❌ User not found!'; return; }
+  if (!user.active) { document.getElementById('lockError').textContent = '❌ Account disabled!'; return; }
+  if (pw === user.password) {
+    isAdmin = user.role === 'admin';
+    enterApp(user);
+  } else {
+    document.getElementById('lockError').textContent = '❌ Wrong password!';
+    document.getElementById('masterPw').value = '';
+    setTimeout(() => document.getElementById('lockError').textContent = '', 3000);
+  }
+}
+
+function enterApp(user) {
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('fabBtn').style.display = 'flex';
+  document.getElementById('userBadge').textContent = user.emoji + ' ' + user.name;
+  // Show admin tabs
+  document.getElementById('catTab').style.display = isAdmin ? '' : 'none';
+  document.getElementById('userTab').style.display = isAdmin ? '' : 'none';
+  document.getElementById('backupTab').style.display = isAdmin ? '' : 'none';
+  // Auto logout
+  if (user.timeout && user.timeout > 0) {
+    clearTimeout(autoLogoutTimer);
+    autoLogoutTimer = setTimeout(() => { toast('⏰ Auto logged out!'); doLogout(); }, user.timeout * 60 * 1000);
+  }
+  sessionStorage.setItem('vault_uid', currentUser);
+  updateCatDropdown();
+  renderEntries();
+  updateStats();
+  renderUsers();
+  renderCatManager();
+  // Update last login
+  db.ref('users/' + currentUser + '/lastLogin').set(Date.now());
+}
+
+function doLogout() {
+  sessionStorage.removeItem('vault_uid');
+  clearTimeout(autoLogoutTimer);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('fabBtn').style.display = 'none';
+  document.getElementById('lockScreen').style.display = 'flex';
+  document.getElementById('masterPw').value = '';
+  currentUser = null;
+  isAdmin = false;
+}
+
+// Auto login
+const savedUid = sessionStorage.getItem('vault_uid');
+if (savedUid) {
+  currentUser = savedUid;
+  db.ref('users/' + savedUid).once('value', snap => {
+    if (snap.exists()) {
+      const user = snap.val();
+      if (user.active !== false) {
+        isAdmin = user.role === 'admin';
+        enterApp(user);
+      }
+    }
+  });
+}
+
+// ============================================================
+// RESET & CHANGE PASSWORD
+// ============================================================
+function openReset() { openModal('resetModal'); }
+
+function doReset() {
+  const code = document.getElementById('resetCode').value.trim();
+  const np = document.getElementById('newPw').value;
+  const cp = document.getElementById('confirmPw').value;
+  const err = document.getElementById('resetError');
+  const user = users[currentUser];
+  if (!user) { err.textContent = '❌ Select a user first!'; return; }
+  if (code !== (user.secretCode || 'TEMPLE2026')) { err.textContent = '❌ Wrong reset code!'; return; }
+  if (np.length < 4) { err.textContent = '❌ Min 4 characters!'; return; }
+  if (np !== cp) { err.textContent = '❌ Passwords do not match!'; return; }
+  db.ref('users/' + currentUser + '/password').set(np).then(() => {
+    closeModal('resetModal');
+    toast('✅ Password reset!');
+  });
+}
+
+function doChangePw() {
+  const old = document.getElementById('oldPw').value;
+  const np = document.getElementById('newPw2').value;
+  const cp = document.getElementById('confirmPw2').value;
+  const err = document.getElementById('changePwError');
+  const user = users[currentUser];
+  if (old !== user.password) { err.textContent = '❌ Wrong current password!'; return; }
+  if (np.length < 4) { err.textContent = '❌ Min 4 characters!'; return; }
+  if (np !== cp) { err.textContent = '❌ Passwords do not match!'; return; }
+  db.ref('users/' + currentUser + '/password').set(np).then(() => {
+    closeModal('changePwModal');
+    toast('✅ Password changed!');
+  });
+}
+
+// ============================================================
+// USER MANAGEMENT
+// ============================================================
+function renderUsers() {
+  const list = document.getElementById('usersList');
+  const allUsers = Object.values(users);
+  if (!allUsers.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><p>No users</p></div>'; return; }
+  list.innerHTML = allUsers.map(u => {
+    const lastLogin = u.lastLogin ? new Date(u.lastLogin).toLocaleString('en-IN') : 'Never';
+    return `<div class="user-card">
+      <div class="user-avatar" style="background:linear-gradient(135deg,${u.role==='admin'?'#7C3AED,#A855F7':'#0891B2,#06B6D4'})">${u.emoji||'👤'}</div>
+      <div class="user-info">
+        <div class="user-name">${u.name} ${u.id===currentUser?'(You)':''}</div>
+        <div class="user-meta">Role: ${u.role} • Last login: ${lastLogin}</div>
+        <div class="user-meta">Timeout: ${u.timeout?u.timeout+' min':'Never'}</div>
+      </div>
+      <div class="user-acts">
+        <span class="status-badge ${u.active!==false?'status-active':'status-disabled'}">${u.active!==false?'Active':'Disabled'}</span>
+        ${u.id !== currentUser ? `
+          <button class="toggle-btn" onclick="toggleUser('${u.id}')">${u.active!==false?'Disable':'Enable'}</button>
+          <button class="act-btn del" onclick="deleteUser('${u.id}')">🗑️</button>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveNewUser() {
+  const emoji = document.getElementById('newUserEmoji').value.trim() || '👤';
+  const name = document.getElementById('newUserName').value.trim();
+  const role = document.getElementById('newUserRole').value;
+  const pw = document.getElementById('newUserPw').value;
+  const secret = document.getElementById('newUserSecret').value.trim() || 'TEMPLE2026';
+  const timeout = parseInt(document.getElementById('newUserTimeout').value) || 0;
+  const err = document.getElementById('addUserError');
+  if (!name) { err.textContent = '⚠️ Name required!'; return; }
+  if (!pw || pw.length < 4) { err.textContent = '⚠️ Password min 4 chars!'; return; }
+  const id = name.toLowerCase().replace(/\s+/g,'_') + '_' + Date.now();
+  const newUser = { id, name, emoji, role, password:pw, secretCode:secret, timeout, active:true, createdAt:Date.now() };
+  db.ref('users/' + id).set(newUser).then(() => {
+    closeModal('addUserModal');
+    toast('✅ User added!');
+  });
+}
+
+function toggleUser(id) {
+  const user = users[id];
+  if (!user) return;
+  db.ref('users/' + id + '/active').set(user.active === false ? true : false).then(() => toast('✅ Updated!'));
+}
+
+function deleteUser(id) {
+  if (!confirm('Delete user ' + users[id]?.name + '?')) return;
+  db.ref('users/' + id).remove().then(() => toast('🗑️ Deleted!'));
+}
+
+// ============================================================
+// CATEGORY MANAGER
+// ============================================================
+function updateCatDropdown() {
+  const allCats = Object.values(categories);
+  const fCat = document.getElementById('fCat');
+  if (!fCat) return;
+  const prev = fCat.value;
+  fCat.innerHTML = allCats.map(c => `<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  if (prev && allCats.find(c => c.id === prev)) fCat.value = prev;
+}
+
+function renderCatManager() {
+  const list = document.getElementById('catMgrList');
+  if (!list) return;
+  const allCats = Object.values(categories);
+  if (!allCats.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🏷️</div><p>No categories</p></div>'; return; }
+  list.innerHTML = allCats.map(cat => `
+    <div class="cat-mgr-item">
+      <div class="cat-mgr-header">
+        <div class="cat-mgr-name">${cat.emoji} ${cat.name} ${cat.isDefault?'<small style="color:var(--muted);font-size:10px;">(default)</small>':''}</div>
+        <div class="cat-mgr-acts">
+          ${!cat.isDefault ? `<button class="act-btn del" onclick="deleteCategory('${cat.id}')">🗑️</button>` : ''}
+        </div>
+      </div>
+      <div>
+        ${(cat.fields||[]).map((f,i) => `
+          <span class="field-chip">
+            ${f.label} <small style="color:var(--accent2)">(${f.type})</small>
+            <button onclick="deleteField('${cat.id}',${i})" title="Delete field">✕</button>
+          </span>
+        `).join('')}
+      </div>
+      <div class="add-field-row">
+        <input type="text" class="add-field-input" id="fl_${cat.id}" placeholder="New field label...">
+        <select class="add-field-select" id="ft_${cat.id}">
+          <option value="text">Text</option>
+          <option value="password">Password</option>
+          <option value="number">Number</option>
+          <option value="date">Date</option>
+          <option value="tel">Phone</option>
+          <option value="url">URL</option>
+          <option value="email">Email</option>
+        </select>
+        <button class="btn-add-field" onclick="addField('${cat.id}')">+ Add</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function createCategory() {
+  const emoji = document.getElementById('newCatEmoji').value.trim() || '📁';
+  const name = document.getElementById('newCatName').value.trim();
+  if (!name) { toast('⚠️ Name required!'); return; }
+  const id = 'custom_' + Date.now();
+  const cat = { id, emoji, name, isDefault:false, fields:[] };
+  db.ref('categories/' + id).set(cat).then(() => {
+    document.getElementById('newCatEmoji').value = '';
+    document.getElementById('newCatName').value = '';
+    document.getElementById('newCatForm').style.display = 'none';
+    toast('✅ Category created!');
+  });
+}
+
+function deleteCategory(id) {
+  if (!confirm('Delete this category?')) return;
+  db.ref('categories/' + id).remove().then(() => toast('🗑️ Deleted!'));
+}
+
+function addField(catId) {
+  const label = document.getElementById('fl_' + catId)?.value.trim();
+  const type = document.getElementById('ft_' + catId)?.value || 'text';
+  if (!label) { toast('⚠️ Field label required!'); return; }
+  const cat = categories[catId];
+  if (!cat) return;
+  const fields = [...(cat.fields || [])];
+  fields.push({ id:'f_'+Date.now(), label, type });
+  db.ref('categories/' + catId + '/fields').set(fields).then(() => toast('✅ Field added!'));
+}
+
+function deleteField(catId, idx) {
+  const cat = categories[catId];
+  if (!cat) return;
+  const fields = [...(cat.fields || [])];
+  fields.splice(idx, 1);
+  db.ref('categories/' + catId + '/fields').set(fields).then(() => toast('🗑️ Field deleted!'));
+}
+
+// ============================================================
+// ENTRY FORM
+// ============================================================
+function onCatChange() {
+  const catId = document.getElementById('fCat').value;
+  renderCatSpecificFields(catId, null);
+}
+
+function renderCatSpecificFields(catId, data) {
+  const container = document.getElementById('catSpecificFields');
+  if (!container) return;
+  const cat = categories[catId];
+  if (!cat || !cat.fields || !cat.fields.length) { container.innerHTML = ''; return; }
+  let html = `<div class="cat-fields-section"><div class="cat-fields-title">📋 ${cat.emoji} ${cat.name} Details</div>`;
+  cat.fields.forEach(f => {
+    const val = data && data[f.id] ? data[f.id] : '';
+    html += `<div class="form-field">
+      <label class="form-label">${f.label}</label>
+      <input type="${f.type}" class="form-input" id="${f.id}" placeholder="Enter ${f.label}" value="${val}">
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getCatFieldsData(catId) {
+  const cat = categories[catId];
+  if (!cat || !cat.fields) return {};
+  const data = {};
+  cat.fields.forEach(f => {
+    const el = document.getElementById(f.id);
+    if (el && el.value.trim()) data[f.id] = el.value.trim();
+  });
+  return data;
+}
+
+function populatOwnerDropdown() {
+  const sel = document.getElementById('fOwner');
+  const allUsers = Object.values(users);
+  sel.innerHTML = [
+    '<option value="all">🌐 All Users</option>',
+    ...allUsers.map(u => `<option value="${u.id}">${u.emoji} ${u.name}</option>`)
+  ].join('');
+  sel.value = currentUser;
+}
+
+function openForm() {
+  editEntryId = null;
+  populatOwnerDropdown();
+  updateCatDropdown();
+  document.getElementById('formTitle').textContent = '➕ New Entry';
+  document.getElementById('fName').value = '';
+  document.getElementById('fUser').value = '';
+  document.getElementById('fPw').value = '';
+  document.getElementById('fUrl').value = '';
+  document.getElementById('fNote').value = '';
+  document.getElementById('fCat').value = Object.keys(categories)[0] || 'web';
+  document.getElementById('fOwner').value = currentUser;
+  document.getElementById('delBtn').style.display = 'none';
+  document.getElementById('catSpecificFields').innerHTML = '';
+  document.getElementById('formModal').classList.add('open');
+  setTimeout(() => onCatChange(), 100);
+}
+
+function openEdit(id) {
+  editEntryId = id;
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  populatOwnerDropdown();
+  updateCatDropdown();
+  document.getElementById('formTitle').textContent = '✏️ Edit Entry';
+  document.getElementById('fName').value = e.name || '';
+  document.getElementById('fUser').value = e.username || '';
+  document.getElementById('fPw').value = e.password || '';
+  document.getElementById('fUrl').value = e.url || '';
+  document.getElementById('fNote').value = e.note || '';
+  document.getElementById('fCat').value = e.category || 'web';
+  document.getElementById('fOwner').value = e.owner || currentUser;
+  document.getElementById('delBtn').style.display = 'block';
+  document.getElementById('formModal').classList.add('open');
+  setTimeout(() => renderCatSpecificFields(e.category, e.catData), 100);
+}
+
+function closeForm() { document.getElementById('formModal').classList.remove('open'); }
+
+function saveEntry() {
+  const name = document.getElementById('fName').value.trim();
+  const username = document.getElementById('fUser').value.trim();
+  const password = document.getElementById('fPw').value.trim();
+  const url = document.getElementById('fUrl').value.trim();
+  const note = document.getElementById('fNote').value.trim();
+  const category = document.getElementById('fCat').value;
+  const owner = document.getElementById('fOwner').value;
+  if (!name) { toast('⚠️ Title required!'); return; }
+  const catData = getCatFieldsData(category);
+  const data = { name, username, password, url, note, category, owner, catData, updatedAt:Date.now() };
+  if (editEntryId) {
+    db.ref('entries/' + editEntryId).update(data).then(() => { closeForm(); toast('✅ Updated!'); });
+  } else {
+    data.createdAt = Date.now();
+    data.createdBy = currentUser;
+    db.ref('entries').push(data).then(() => { closeForm(); toast('✅ Saved!'); });
+  }
+}
+
+function deleteEntry() {
+  if (!editEntryId) return;
+  if (!confirm('Delete this entry?')) return;
+  db.ref('entries/' + editEntryId).remove().then(() => { closeForm(); toast('🗑️ Deleted!'); });
+}
+
+function genPassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  let pw = '';
+  for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('fPw').value = pw;
+  toast('⚡ Password generated!');
+}
+
+// ============================================================
+// RENDER ENTRIES
+// ============================================================
+const CAT_COLORS = {
+  web:'#7C3AED', bank:'#059669', app:'#0891B2', email:'#D97706',
+  shopping:'#DB2777', streaming:'#7C3AED', work:'#4F46E5',
+  govt:'#6B7280', other:'#6B7280'
+};
+
+function getVisibleEntries() {
+  let list = [...entries];
+  if (!isAdmin) list = list.filter(e => !e.owner || e.owner === currentUser || e.owner === 'all');
+  if (currentCat !== 'All') list = list.filter(e => e.category === currentCat);
+  const q = (document.getElementById('searchInp')?.value || '').toLowerCase().trim();
+  if (q) list = list.filter(e =>
+    e.name.toLowerCase().includes(q) ||
+    (e.username||'').toLowerCase().includes(q) ||
+    (e.url||'').toLowerCase().includes(q) ||
+    (e.note||'').toLowerCase().includes(q)
+  );
+  return list.sort((a,b) => a.name.localeCompare(b.name));
+}
+
+function renderEntries() {
+  const list = getVisibleEntries();
+  const container = document.getElementById('entriesList');
+  if (!container) return;
+
+  // Update cat filter
+  const allCats = Object.values(categories);
+  const usedCatIds = [...new Set(entries.map(e => e.category))];
+  document.getElementById('catFilter').innerHTML = [
+    `<button class="cat-chip ${currentCat==='All'?'active':''}" onclick="setCat('All')">All</button>`,
+    ...allCats.filter(c => usedCatIds.includes(c.id)).map(c =>
+      `<button class="cat-chip ${currentCat===c.id?'active':''}" onclick="setCat('${c.id}')">${c.emoji} ${c.name}</button>`
+    )
+  ].join('');
+
+  if (!list.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🔒</div><p>No entries found</p></div>';
+    return;
+  }
+
+  container.innerHTML = list.map(e => {
+    const cat = categories[e.category];
+    const color = CAT_COLORS[e.category] || '#7C3AED';
+    const catFields = cat?.fields || [];
+    const hasCatData = e.catData && Object.keys(e.catData).length > 0;
+    return `
+    <div class="entry-card" id="card-${e.id}">
+      <div class="entry-header" onclick="toggleDetail('${e.id}')">
+        <div class="entry-icon" style="background:${color}22">${cat?.emoji||'🔧'}</div>
+        <div class="entry-info">
+          <div class="entry-name">${e.name}</div>
+          <div class="entry-sub">${e.username||'No username'}${e.url?' • '+e.url:''}</div>
+        </div>
+        <div class="entry-acts">
+          ${isAdmin||e.owner===currentUser||e.owner==='all'?`<button class="act-btn" onclick="event.stopPropagation();openEdit('${e.id}')">✏️</button>`:''}
+          <button class="act-btn" onclick="event.stopPropagation();quickCopy('${e.id}')">📋</button>
+        </div>
+      </div>
+      <div class="entry-detail" id="detail-${e.id}">
+        ${e.username?`<div class="detail-row"><span class="detail-label">Username</span><span class="detail-value">${e.username}<button class="copy-btn" onclick="copyText('${e.username}')">Copy</button></span></div>`:''}
+        <div class="detail-row">
+          <span class="detail-label">Password</span>
+          <span class="detail-value">
+            <span id="pw-${e.id}">${showPwMap[e.id]?e.password:'••••••••'}</span>
+            <button class="act-btn" onclick="togglePw('${e.id}','${e.password}')" style="padding:3px 6px;font-size:11px;">${showPwMap[e.id]?'🙈':'👁️'}</button>
+            <button class="copy-btn" onclick="copyText('${e.password}')">Copy</button>
+          </span>
+        </div>
+        ${e.url?`<div class="detail-row"><span class="detail-label">URL</span><span class="detail-value"><a href="${e.url}" target="_blank" style="color:var(--accent2);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;display:inline-block;">${e.url}</a></span></div>`:''}
+        ${e.note?`<div class="detail-row"><span class="detail-label">Notes</span><span class="detail-value" style="font-family:inherit;font-size:12px;text-align:right;max-width:60%;">${e.note}</span></div>`:''}
+        ${hasCatData?catFields.filter(f=>e.catData[f.id]).map(f=>`
+          <div class="detail-row">
+            <span class="detail-label">${f.label}</span>
+            <span class="detail-value">
+              <span id="cf-${e.id}-${f.id}">${f.type==='password'?(showPwMap[e.id+'_'+f.id]?e.catData[f.id]:'••••••••'):e.catData[f.id]}</span>
+              ${f.type==='password'?`<button class="act-btn" onclick="toggleCf('${e.id}','${f.id}','${e.catData[f.id]}')" style="padding:3px 6px;font-size:11px;">${showPwMap[e.id+'_'+f.id]?'🙈':'👁️'}</button>`:''}
+              <button class="copy-btn" onclick="copyText('${e.catData[f.id]}')">Copy</button>
+            </span>
+          </div>`).join(''):''}
+        <div class="detail-row"><span class="detail-label">Owner</span><span class="detail-value" style="font-family:inherit;">${e.owner==='all'?'🌐 All':users[e.owner]?.name||e.owner}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(id) {
+  document.getElementById('detail-'+id)?.classList.toggle('open');
+}
+
+function togglePw(id, pw) {
+  showPwMap[id] = !showPwMap[id];
+  const el = document.getElementById('pw-'+id);
+  if (el) el.textContent = showPwMap[id] ? pw : '••••••••';
+}
+
+function toggleCf(entryId, fieldId, val) {
+  const key = entryId+'_'+fieldId;
+  showPwMap[key] = !showPwMap[key];
+  const el = document.getElementById('cf-'+entryId+'-'+fieldId);
+  if (el) el.textContent = showPwMap[key] ? val : '••••••••';
+}
+
+function setCat(cat) { currentCat = cat; renderEntries(); }
+
+function quickCopy(id) {
+  const e = entries.find(x => x.id === id);
+  if (e) copyText(e.password);
+}
+
+function copyText(text) {
+  if (navigator.clipboard) { navigator.clipboard.writeText(text).then(() => toast('✅ Copied!')); }
+  else { const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('✅ Copied!'); }
+}
+
+function updateStats() {
+  const mine = isAdmin ? entries : entries.filter(e => !e.owner||e.owner===currentUser||e.owner==='all');
+  document.getElementById('totalCount').textContent = entries.length;
+  document.getElementById('catCount').textContent = Object.keys(categories).length;
+  document.getElementById('myCount').textContent = mine.length;
+}
+
+// ============================================================
+// BACKUP & RESTORE
+// ============================================================
+function exportBackup() {
+  const backup = {
+    version: '2.0',
+    exportedAt: new Date().toISOString(),
+    exportedBy: currentUser,
+    entries, users, categories
+  };
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sr-vault-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  const now = new Date().toLocaleString('en-IN');
+  document.getElementById('lastBackup').textContent = now;
+  localStorage.setItem('lastBackup', now);
+  toast('✅ Backup downloaded!');
+}
+
+function importBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!confirm('⚠️ This will REPLACE all current data! Are you sure?')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const backup = JSON.parse(ev.target.result);
+      if (!backup.entries && !backup.categories) throw new Error('Invalid backup file');
+      const updates = {};
+      if (backup.entries) {
+        Object.keys(backup.entries).forEach(k => { updates['entries/' + k] = backup.entries[k]; });
+      }
+      if (backup.categories) {
+        Object.keys(backup.categories).forEach(k => { updates['categories/' + k] = backup.categories[k]; });
+      }
+      db.ref().update(updates).then(() => {
+        toast('✅ Backup restored successfully!');
+        event.target.value = '';
+      });
+    } catch(e) {
+      toast('❌ Invalid backup file!');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function switchPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('fabBtn').style.display = page === 'passwords' ? 'flex' : 'none';
+  if (page === 'categories') renderCatManager();
+  if (page === 'users') renderUsers();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function toggleEye(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Close on backdrop
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+document.getElementById('formModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('formModal')) closeForm();
+});
+
+// Last backup display
+const lb = localStorage.getItem('lastBackup');
+if (lb) document.getElementById('lastBackup').textContent = lb;
+</script>
+</body>
+</html>
