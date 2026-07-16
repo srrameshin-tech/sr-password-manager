@@ -454,6 +454,21 @@ let currentCat = 'All';
 let autoLogoutTimer = null;
 let showPwMap = {};
 
+// Master login password hashing (SHA-256) — auto-migrates legacy plaintext on next successful login.
+// NOTE: this only applies to the master login password that protects entry into the vault.
+// Site/app passwords stored inside entries stay as-is since the whole point is to view them.
+async function sha256Hex(str) {
+  const enc = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function isHashFormat(str) { return typeof str === 'string' && /^[a-f0-9]{64}$/i.test(str); }
+async function verifyMasterPassword(entered, stored) {
+  if (!stored) return false;
+  if (isHashFormat(stored)) return (await sha256Hex(entered)) === stored;
+  return entered === stored; // legacy plaintext fallback
+}
+
 // ============================================================
 // DEFAULT DATA
 // ============================================================
@@ -603,12 +618,16 @@ function selectUser(id) {
   renderLockScreen();
 }
 
-function doLogin() {
+async function doLogin() {
   const pw = document.getElementById('masterPw').value;
   const user = users[currentUser];
   if (!user) { document.getElementById('lockError').textContent = '❌ User not found!'; return; }
   if (!user.active) { document.getElementById('lockError').textContent = '❌ Account disabled!'; return; }
-  if (pw === user.password) {
+  const ok = await verifyMasterPassword(pw, user.password);
+  if (ok) {
+    if (!isHashFormat(user.password)) {
+      db.ref('users/' + currentUser + '/password').set(await sha256Hex(pw));
+    }
     isAdmin = user.role === 'admin';
     enterApp(user);
   } else {
@@ -683,22 +702,23 @@ function doReset() {
   if (code !== (user.secretCode || 'TEMPLE2026')) { err.textContent = '❌ Wrong reset code!'; return; }
   if (np.length < 4) { err.textContent = '❌ Min 4 characters!'; return; }
   if (np !== cp) { err.textContent = '❌ Passwords do not match!'; return; }
-  db.ref('users/' + currentUser + '/password').set(np).then(() => {
+  sha256Hex(np).then(hashed => db.ref('users/' + currentUser + '/password').set(hashed)).then(() => {
     closeModal('resetModal');
     toast('✅ Password reset!');
   });
 }
 
-function doChangePw() {
+async function doChangePw() {
   const old = document.getElementById('oldPw').value;
   const np = document.getElementById('newPw2').value;
   const cp = document.getElementById('confirmPw2').value;
   const err = document.getElementById('changePwError');
   const user = users[currentUser];
-  if (old !== user.password) { err.textContent = '❌ Wrong current password!'; return; }
+  const oldOk = await verifyMasterPassword(old, user.password);
+  if (!oldOk) { err.textContent = '❌ Wrong current password!'; return; }
   if (np.length < 4) { err.textContent = '❌ Min 4 characters!'; return; }
   if (np !== cp) { err.textContent = '❌ Passwords do not match!'; return; }
-  db.ref('users/' + currentUser + '/password').set(np).then(() => {
+  db.ref('users/' + currentUser + '/password').set(await sha256Hex(np)).then(() => {
     closeModal('changePwModal');
     toast('✅ Password changed!');
   });
@@ -742,8 +762,10 @@ function saveNewUser() {
   if (!name) { err.textContent = '⚠️ Name required!'; return; }
   if (!pw || pw.length < 4) { err.textContent = '⚠️ Password min 4 chars!'; return; }
   const id = name.toLowerCase().replace(/\s+/g,'_') + '_' + Date.now();
-  const newUser = { id, name, emoji, role, password:pw, secretCode:secret, timeout, active:true, createdAt:Date.now() };
-  db.ref('users/' + id).set(newUser).then(() => {
+  sha256Hex(pw).then(hashedPw => {
+    const newUser = { id, name, emoji, role, password:hashedPw, secretCode:secret, timeout, active:true, createdAt:Date.now() };
+    return db.ref('users/' + id).set(newUser);
+  }).then(() => {
     closeModal('addUserModal');
     toast('✅ User added!');
   });
